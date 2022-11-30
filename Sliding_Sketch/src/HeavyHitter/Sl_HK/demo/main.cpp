@@ -1,3 +1,6 @@
+/*
+Heavy Hitter： 找出大于阈值的流量
+*/
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -43,23 +46,26 @@ int main(int argc, char* argv[])
 {
     ifstream fin("../../../../data/formatted00.dat",ios::in|ios::binary);
 
-    int MEM,K;
+    int MEM, K;
 
     MEM = 200;
-    K = 1000;
-    int cycle = 1000000;
+    K = 1000; // K为阈值
+    int cycle = 4000000;
     int read_length = 8;
+    //int read_length = 16;
     string* cyc_dat = new string[cycle];
 
-    int m = 1000000;
+    int m = 4000000;
     // preparing heavykeeper
     int hk_M;
     int field_num = 2;
-    int single_size = 8 + (4 * (field_num + 1));
+    //int single_size = 8 + (4 * (field_num + 1));
+    int single_size = 8 + (4 * field_num);
     //for (hk_M=1; single_size*hk_M*HK_d+432*K<=MEM*1024*8; hk_M++); if (hk_M%2==0) hk_M--;
     hk_M = MEM * 1024 / (single_size * HK_d);
     heavykeeper *hk; 
-    hk=new heavykeeper(hk_M,cycle,field_num); hk->clear();
+    hk = new heavykeeper(hk_M,cycle,field_num); 
+    hk->clear();
 
     double average_cr = 0;
     double average_rr = 0;
@@ -72,10 +78,11 @@ int main(int argc, char* argv[])
 	{
 	    //if (i%(m/10)==0) cout<<"Insert "<<i<<endl;
 		string s=Read(read_length, fin);
-        
+        /*
         if(i >= cycle){
             B[cyc_dat[(i%cycle)]] --;
         }
+        */
         cyc_dat[(i%cycle)] = s;
 		B[s]++;
 		hk->Insert(s, i);
@@ -85,12 +92,7 @@ int main(int argc, char* argv[])
             are = 0;
             out_num ++;
 
-            //cout<<"preparing true flow"<<endl;
             // preparing true flow
-            int cnt=0;
-
-
-            cnt = 0;
             double recall = 0;
             double recall_ = 0;
             double real = 0;
@@ -98,8 +100,13 @@ int main(int argc, char* argv[])
             for(int qi = 0; qi < HK_d; qi++){
                 for(int qj = 0; qj < hk_M; qj++){
                     if(map_hk.find(hk->HK[qi][qj].FP) == map_hk.end()){
+                        // 标记已查询
                         map_hk[hk->HK[qi][qj].FP] = 1;
                         if(hk->num_query(hk->HK[qi][qj].FP) > K){
+                            for (int j = 0; j < read_length; j++) {
+                                printf("%x ", (unsigned int)(unsigned char)hk->HK[qi][qj].FP[j]);
+                            }
+                            printf("\n");
                             real = real + 1;
                             if(B[hk->HK[qi][qj].FP] > K){
                                 real_ = real_ + 1;
@@ -109,7 +116,6 @@ int main(int argc, char* argv[])
                 }
             }
 
-            
             //cout << "precision rate:" << real_/real << endl;
             average_cr = average_cr + (real_/real);
             
@@ -128,33 +134,19 @@ int main(int argc, char* argv[])
             average_rr = average_rr + (recall_/recall);
             average_heavy = average_heavy + recall;
 
-            cout << "Sl-HK,"<<"Arrivals:"<<i<<",Recall Rate:"<<recall_/recall << endl;
-            cout << "Sl-HK,"<<"Arrivals:"<<i<<",Precision Rate:"<<real_/real << endl;
-
+            cout << "Sl-HK,"<<"Arrivals:"<<i<<" SL_recall: "<<recall_ <<" Real_recall: " <<recall<<",Recall Rate:"<<recall_/recall << endl;
+            cout << "Sl-HK,"<<"Arrivals:"<<i<<" SL_real: "<<real_<<" Real_real: " << real << ",Precision Rate:"<<real_/real << endl;
 
             map_hk.clear();
-
-            
-
         }
 	}
 
-    /*
-    switch(out_model){
-    case 1:
-        fout << argv[9] <<"," << argv[1] <<"," << average_cr / out_num << endl; // percision rate
-        break;
-    case 2:
-        fout << argv[9] << "," << argv[1] << "," << average_rr / out_num << endl; // recall rate
-        break;
-
-    }*/
-
+    cout << "out_num: " << out_num << " average_heavy: " << average_heavy << " average_cr: " << average_cr << " average_rr: " << average_rr << endl;
     cout << "total average heavy hitter:" << average_heavy / out_num << endl;
     cout << "average precision rate:" << average_cr / out_num << endl;
     cout <<"average recall rate:" << average_rr / out_num << endl;
     
-
-	
+    delete[] cyc_dat;
+    delete hk;
     return 0;
 }

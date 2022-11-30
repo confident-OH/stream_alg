@@ -15,7 +15,8 @@
 
 
 using namespace std;
-unordered_map<Data, int, My_Hash> mp;
+unordered_map<Data, int, > mp;
+//unordered_map<Data, int, My_Hash> mp;
 
 //argv[1]:cycle
 //argv[2]:input_file

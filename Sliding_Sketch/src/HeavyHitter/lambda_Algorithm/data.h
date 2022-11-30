@@ -15,9 +15,13 @@ bool operator == (Data bn, Data an);
 
 class My_Hash{
 public:
-    size_t operator()(const Data dat) const{
+    size_t operator()(const Data & dat) const{
         return RSHash(dat.str, DATA_LEN);
     }
 };
+
+size_t op_hash(const Data & dat){
+    return RSHash(dat.str, DATA_LEN);
+}
 
 #endif // DATA_H

@@ -13,26 +13,21 @@
 #include "BOBHash64.h"
 #define HK_d 8
 #define HK_b 1.08
-#define rep(i, a, n) for (int i = a; i <= n; i++)
+
 using namespace std;
 class heavykeeper
 {
 public:
-    struct node
-    {
-        int *C;
-        string FP;
-    } HK[HK_d][MAX_MEM + 10];
+    heavykeeper_node HK[HK_d][MAX_MEM + 10];
     BOBHash64 *bobhash;
+    unsigned long long time_stamp;
     int M2;
     int cycle;
-    double time_now;
-    int time_pos;
     int field_num;
-    heavykeeper(int M2, int cycle, int field_num) : M2(M2), cycle(cycle), field_num(field_num)
+    unsigned max_k;
+    heavykeeper(int M2, int cycle, int field_num, unsigned max_k) : M2(M2), cycle(cycle), field_num(field_num), max_k(max_k)
     {
-        time_now=0;
-        time_pos=0;
+        time_stamp = 0;
         for (int hk_i = 0; hk_i < HK_d; hk_i++)
         {
             for (int hk_j = 0; hk_j < MAX_MEM + 10; hk_j++)
@@ -49,55 +44,49 @@ public:
                 for (int k = 0; k < field_num; k++) {
                     HK[i][j].C[k] = 0;
                 }
-                HK[i][j].FP.clear();
+                memset(HK[i][j].FP, 0, sizeof(HK[i][j].FP));
             }       
     }
     // hash function
-    unsigned long long Hash(int j, string ST)
+    unsigned long long Hash(int j, char *mem_s, unsigned size)
     {
         bobhash = new BOBHash64(j + 10);
-        unsigned long long ans = (bobhash->run(ST.c_str(), ST.size()));
+        unsigned long long ans = (bobhash->run(mem_s, size));
         delete bobhash;
 
         return ans;
     }
 
     // update an item
-    void Insert(string x, int time_stamp)
+    void Insert(char *mem_s, unsigned size)
     {
-        if (time_stamp > (cycle / (field_num)))
+        char item[MAX_DATA_SIZE];
+        memcpy(item, mem_s, size);
+        time_stamp += 1;
+
+        // 是否需要窗口滑动
+        if (time_stamp % (M2 * HK_d) == 0)
         {
             int time_i = 0;
-            for (; ((time_i + 1) * cycle / field_num / HK_d / M2) + time_now < time_stamp; time_i++)
-            {
-                int hki = time_pos / M2;
-                int hkj = time_pos % M2;
-
+            int hki = (time_stamp / M2 - 1) % HK_d;
+            //cout << "Debug: zyq enter time_stamp: " << time_stamp << endl;
+            for (int time_i = 0; time_i < M2; time_i++) {
                 for (int nk = field_num - 1; nk > 0; nk--)
                 {
-                    //就没sequenc机智，就搁这一个个挪。
-                    HK[hki][hkj].C[nk] = HK[hki][hkj].C[nk - 1];
+                    HK[hki][time_i].C[nk] = HK[hki][time_i].C[nk - 1];
                 }
-                HK[hki][hkj].C[0] = 0;
-                time_pos++;
-                time_pos = time_pos % (M2 * HK_d);
+                HK[hki][time_i].C[0] = 0;
             }
-            time_now = time_now + ((time_i + 0.0) * cycle / field_num / HK_d / M2);
-            cout << "time_i: " << time_i << " time_now: " << time_now << " time_stamp: " << time_stamp << endl;
-        }
-        else
-        {
-            time_now = time_stamp;
         }
 
         // calculate finger print
         for (int j = 0; j < HK_d; j++)
         {
             // calculate position
-            unsigned long long H = Hash(j, x);
+            unsigned long long H = Hash(j, item, size);
             int Hsh = H % (M2 - (2 * HK_d) + 2 * j + 3);
 
-            if (HK[j][Hsh].FP == x)
+            if (!memcmp(item, HK[j][Hsh].FP, size))
             {
                 // If the finger print indicates that it is the same element
                 HK[j][Hsh].C[0]++;
@@ -124,7 +113,7 @@ public:
                     }
                     if (flag == false)
                     {
-                        HK[j][Hsh].FP = x;
+                        memcpy(HK[j][Hsh].FP, item, size);
                         HK[j][Hsh].C[0] = 1;
                     }
                 }
@@ -132,16 +121,16 @@ public:
         }
     }
     // query an item
-    int num_query(string x)
+    bool num_query(const char *mem_s, unsigned size)
     {
-
-        // int FP=(H>>48);
+        char item[MAX_DATA_SIZE];
+        memcpy(item, mem_s, size);
         int maxv = 0;
         for (int j = 0; j < HK_d; j++)
         {
-            unsigned long long H = Hash(j, x);
+            unsigned long long H = Hash(j, item, size);
             int Hsh = H % (M2 - (2 * HK_d) + 2 * j + 3);
-            if (HK[j][Hsh].FP == x)
+            if (!memcmp(HK[j][Hsh].FP, item, size))
             {
                 int prob = 0;
                 for (int prob_i = 0; prob_i < field_num; prob_i++)
@@ -152,7 +141,7 @@ public:
             }
         }
         // 和的最大值
-        return maxv;
+        return maxv > max_k;
     }
 };
 #endif

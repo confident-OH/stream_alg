@@ -12,59 +12,50 @@ Heavy Hitter： 找出大于阈值的流量
 #include <math.h>
 #include <fstream>
 #include <iomanip>
-#include "../BOBHash32.h"
-#include "../params.h"
-#include "../heavykeeper.h"
+#include "BOBHash32.h"
+#include "params.h"
+#include "heavykeeper.h"
 
 using namespace std;
 map <string ,int> B;
 map <string, int> map_hk;
 struct node {string x;int y;} p[10000005];
 
-char a[105];
-string Read(int read_length, ifstream& fin)
+void Read(int read_length, ifstream& fin, char *data)
 {
-    fin.read(a, read_length);
-    a[read_length]='\0';
-    string tmp=a;
-    return tmp;
+    fin.read(data, read_length);
+    data[read_length] = '\0';
 }
 int cmp(node i,node j) {return i.y>j.y;}
 
-//argv[1]:MEM  KB
-//argv[2]:K  heavy_hitter
-//argv[3]:m, number of flows
-//argv[4]:cycle
-//argv[5]:read_length
-//argv[6]:input_file_name
-//argv[7]:field_num
-//argv[8]:out_model
-//argv[9]:str_name
-//argv[10]:output_file
+//argv[1]:period,  update/instert 时间窗口大小
+//argv[2]:memory_size 总体使用的内存大小(单位KB)
+//argv[3]:hash_num  所使用的哈希个数
+//argv[4]:field_num  新旧桶的个数
+//argv[5]:K  阈值
 
 int main(int argc, char* argv[])
 {
-    ifstream fin("../../../../data/formatted00.dat",ios::in|ios::binary);
-
-    int MEM, K;
-
-    MEM = 200;
-    K = 1000; // K为阈值
+    int MEM = 2000, K = 100;
+    int field_num = 2;
     int cycle = 4000000;
-    int read_length = 8;
-    //int read_length = 16;
-    string* cyc_dat = new string[cycle];
-
+    int read_length = 4;
     int m = 4000000;
+
+    ifstream fin("../../../../data/formatted00.dat",ios::in|ios::binary);
+    if (argc < 6) {
+        printf("Sketch will use default config\n");
+    }
+    else {
+
+    }
+    
     // preparing heavykeeper
     int hk_M;
-    int field_num = 2;
-    //int single_size = 8 + (4 * (field_num + 1));
     int single_size = 8 + (4 * field_num);
-    //for (hk_M=1; single_size*hk_M*HK_d+432*K<=MEM*1024*8; hk_M++); if (hk_M%2==0) hk_M--;
     hk_M = MEM * 1024 / (single_size * HK_d);
     heavykeeper *hk; 
-    hk = new heavykeeper(hk_M,cycle,field_num); 
+    hk = new heavykeeper(hk_M, cycle, field_num, K); 
     hk->clear();
 
     double average_cr = 0;
@@ -76,22 +67,13 @@ int main(int argc, char* argv[])
     // Inserting
     for (int i=1; i<=m; i++)
 	{
-	    //if (i%(m/10)==0) cout<<"Insert "<<i<<endl;
-		string s=Read(read_length, fin);
-        /*
-        if(i >= cycle){
-            B[cyc_dat[(i%cycle)]] --;
-        }
-        */
-        cyc_dat[(i%cycle)] = s;
-		B[s]++;
-		hk->Insert(s, i);
-
+        char s[MAX_DATA_SIZE];
+		Read(read_length, fin, s);
+		B[string(s)]++;
+		hk->Insert(s, read_length);
 
         if(i%cycle == 0){
-            are = 0;
             out_num ++;
-
             // preparing true flow
             double recall = 0;
             double recall_ = 0;
@@ -102,33 +84,29 @@ int main(int argc, char* argv[])
                     if(map_hk.find(hk->HK[qi][qj].FP) == map_hk.end()){
                         // 标记已查询
                         map_hk[hk->HK[qi][qj].FP] = 1;
-                        if(hk->num_query(hk->HK[qi][qj].FP) > K){
+                        if(hk->num_query(hk->HK[qi][qj].FP, read_length)){
                             for (int j = 0; j < read_length; j++) {
                                 printf("%x ", (unsigned int)(unsigned char)hk->HK[qi][qj].FP[j]);
                             }
                             printf("\n");
                             real = real + 1;
-                            if(B[hk->HK[qi][qj].FP] > K){
+                            if(B[string(hk->HK[qi][qj].FP)] > K){
                                 real_ = real_ + 1;
                             }
                         }
                     }
                 }
             }
-
-            //cout << "precision rate:" << real_/real << endl;
             average_cr = average_cr + (real_/real);
-            
+
             for(map <string ,int>::iterator sit = B.begin();sit != B.end(); sit++){
                 if(sit->second > K){
-                    are = are + (fabs(sit->second - hk->num_query(sit->first)) + 0.0)/sit->second;
                     recall = recall + 1;
-                    if(hk->num_query(sit->first) > K){
+                    if(hk->num_query((sit->first).c_str(), read_length)){
                         recall_ = recall_ + 1;
                     }
                 }
             }
-            are = are/recall;
 
             //cout << "recall rate:" << recall_/recall << endl;
             average_rr = average_rr + (recall_/recall);
@@ -146,7 +124,6 @@ int main(int argc, char* argv[])
     cout << "average precision rate:" << average_cr / out_num << endl;
     cout <<"average recall rate:" << average_rr / out_num << endl;
     
-    delete[] cyc_dat;
     delete hk;
     return 0;
 }

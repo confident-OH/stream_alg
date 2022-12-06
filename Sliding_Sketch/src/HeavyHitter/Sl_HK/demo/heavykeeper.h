@@ -21,10 +21,16 @@ public:
     heavykeeper_node HK[HK_d][MAX_MEM + 10];
     BOBHash64 *bobhash;
     unsigned long long time_stamp;
+    int update_i;
     int M2;
     int cycle;
     int field_num;
     unsigned max_k;
+    unsigned period;
+    unsigned memory_size;
+    unsigned hash_num;
+    
+    /*
     heavykeeper(int M2, int cycle, int field_num, unsigned max_k) : M2(M2), cycle(cycle), field_num(field_num), max_k(max_k)
     {
         time_stamp = 0;
@@ -37,16 +43,34 @@ public:
             }
         }
     }
-    void clear()
+    */
+    heavykeeper(unsigned period, unsigned memory_size, unsigned hash_num, int field_num, unsigned max_k) 
+    : period(period), memory_size(memory_size), hash_num(hash_num), field_num(field_num), max_k(max_k)
     {
-        for (int i = 0; i < HK_d; i++)
-            for (int j = 0; j <= M2 + 5; j++) {
-                for (int k = 0; k < field_num; k++) {
-                    HK[i][j].C[k] = 0;
-                }
-                memset(HK[i][j].FP, 0, sizeof(HK[i][j].FP));
-            }       
+        time_stamp = 0;
+        update_i = 0;
+        int hk_M;
+        int single_size = 8 + (4 * field_num);
+        M2 = memory_size * 1024 / (single_size * hash_num);
+        for (int hk_i = 0; hk_i < hash_num; hk_i++)
+        {
+            for (int hk_j = 0; hk_j < M2 + 10; hk_j++)
+            {
+                HK[hk_i][hk_j].C = new int[field_num];
+                memset(HK[hk_i][hk_j].C, 0, field_num * sizeof(int));
+                memset(HK[hk_i][hk_j].FP, 0, sizeof(HK[hk_i][hk_j].FP));
+            }
+        }
     }
+    ~heavykeeper()
+    {
+        for (int hk_i = 0; hk_i < hash_num; hk_i++) {
+            for (int hk_j = 0; hk_j < MAX_MEM + 10; hk_j++) {
+                delete HK[hk_i][hk_j].C;
+            }
+        }
+    }
+    
     // hash function
     unsigned long long Hash(int j, char *mem_s, unsigned size)
     {
@@ -65,10 +89,10 @@ public:
         time_stamp += 1;
 
         // 是否需要窗口滑动
-        if (time_stamp % (M2 * HK_d) == 0)
+        if (time_stamp % (period) == 0)
         {
             int time_i = 0;
-            int hki = (time_stamp / M2 - 1) % HK_d;
+            int hki = (update_i++) % hash_num;
             //cout << "Debug: zyq enter time_stamp: " << time_stamp << endl;
             for (int time_i = 0; time_i < M2; time_i++) {
                 for (int nk = field_num - 1; nk > 0; nk--)
@@ -80,11 +104,12 @@ public:
         }
 
         // calculate finger print
-        for (int j = 0; j < HK_d; j++)
+        for (int j = 0; j < hash_num; j++)
         {
             // calculate position
             unsigned long long H = Hash(j, item, size);
-            int Hsh = H % (M2 - (2 * HK_d) + 2 * j + 3);
+            int Hsh = H % (M2 - (2 * hash_num) + 2 * j + 3); //很神奇，这个准确率高
+            //int Hsh = H % (M2 - 1);
 
             if (!memcmp(item, HK[j][Hsh].FP, size))
             {
@@ -126,10 +151,10 @@ public:
         char item[MAX_DATA_SIZE];
         memcpy(item, mem_s, size);
         int maxv = 0;
-        for (int j = 0; j < HK_d; j++)
+        for (int j = 0; j < hash_num; j++)
         {
             unsigned long long H = Hash(j, item, size);
-            int Hsh = H % (M2 - (2 * HK_d) + 2 * j + 3);
+            int Hsh = H % (M2 - (2 * hash_num) + 2 * j + 3);
             if (!memcmp(HK[j][Hsh].FP, item, size))
             {
                 int prob = 0;
